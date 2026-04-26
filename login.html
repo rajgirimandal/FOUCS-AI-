@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>FOCUS AI | Secure Login</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- Tailwind -->
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="min-h-screen flex items-center justify-center bg-slate-100">
+
+    <div class="w-full max-w-md bg-white shadow-xl rounded-2xl p-6">
+
+        <!-- Header -->
+        <div class="flex items-center justify-center gap-3 mb-6">
+            <img src="ailogo.png" class="h-10 w-10" alt="FOCUS AI">
+            <h1 class="text-2xl font-bold text-slate-800">
+                FOCUS <span class="text-blue-600">AI</span>
+            </h1>
+        </div>
+
+        <h2 class="text-center text-sm font-semibold text-slate-600 mb-4">
+            Authorized School Login Only
+        </h2>
+
+        <!-- Login Form -->
+        <div class="space-y-4">
+            <input id="userId" type="text" placeholder="User ID"
+                class="w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+
+            <input id="passkey" type="password" placeholder="Passkey"
+                class="w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+
+            <button onclick="login()"
+                class="w-full bg-blue-600 text-white py-2 rounded-md font-semibold hover:bg-blue-700">
+                LOGIN
+            </button>
+
+            <p id="errorMsg" class="text-sm text-red-600 text-center hidden">
+                Invalid User ID or Passkey
+            </p>
+        </div>
+
+        <p class="text-[11px] text-center text-slate-500 mt-6">
+              FocusAI · Secure Examination System
+        </p>
+    </div>
+
+<script>
+    // Authorized credentials (from passkey file)
+    const AUTH_USERS = {
+        "FOUCS_AI": "FOUCS_AI"
+    };
+
+    function login() {
+        const user = document.getElementById("userId").value.trim();
+        const pass = document.getElementById("passkey").value.trim();
+        const error = document.getElementById("errorMsg");
+
+        if (AUTH_USERS[user] && AUTH_USERS[user] === pass) {
+            // Save session (simple)
+            sessionStorage.setItem("focusai_auth", "true");
+            sessionStorage.setItem("focusai_user", user);
+
+            // Redirect to main system
+            window.location.href = "index.html";
+        } else {
+            error.classList.remove("hidden");
+        }
+    }
+
+
+</script>
+
+</body>
+</html>

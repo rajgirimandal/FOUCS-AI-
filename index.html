@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>FOCUS AI: School Focus & Exam Detection (Pro)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- Tailwind -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- TensorFlow / Pose / COCO-SSD -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-core"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-converter"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgl"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>    
+
+    <!-- MediaPipe Hands -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils"></script>
+
+    <!-- Charts & PDF -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable"></script>
+
+    <!-- Custom Styles -->
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body class="h-screen flex flex-col overflow-hidden">
+
+    <!-- Alarm Sound -->
+    <audio id="alarmSound" src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg"></audio>
+
+    <!-- SPLASH SCREEN -->
+    <div id="splash-screen">
+        <img src="ailogo.png" alt="FOCUS AI Logo">
+    </div>
+
+    <!-- MODE SELECTION -->
+    <div id="modeSelection" class="hidden flex-1 flex flex-col modeSelection-bg">
+        <div class="school-header p-4 flex justify-between items-center">
+            <div>
+                <h1 class="text-xl font-bold text-white tracking-widest">
+                    FOCUS<span class="text-yellow-300">AI</span>
+                </h1>
+                <p class="text-xs text-blue-200">School Monitoring & Analytics</p>
+            </div>
+
+            <div class="flex items-center gap-4">
+                <div class="text-xs text-blue-100 text-right hidden sm:block">
+                    <div class="uppercase tracking-wide">MODE SELECTION</div>
+                    <div class="text-[10px]">Choose how you want to monitor today</div>
+                </div>
+
+                <button onclick="toggleMainMenu()"
+                        class="p-2 rounded-full bg-blue-900/60 hover:bg-blue-800 text-blue-100 flex flex-col justify-center">
+                    <span class="block w-4 h-[2px] bg-blue-100 mb-[3px]"></span>
+                    <span class="block w-4 h-[2px] bg-blue-100 mb-[3px]"></span>
+                    <span class="block w-4 h-[2px] bg-blue-100"></span>
+                </button>
+            </div>
+        </div>
+
+        <div class="flex-1 flex items-center justify-center px-4">
+            <div class="max-w-3xl w-full flex flex-col items-center gap-8">
+
+                <div class="hud-panel px-8 py-6 rounded-2xl flex flex-col items-center text-center">
+                    <h2 class="text-xl font-bold">
+                        Welcome to
+                        <span class="text-blue-700">FOCUS<span class="text-yellow-400">AI</span></span>
+                    </h2>
+                    <p class="text-xs text-slate-500 mt-1">
+                        Select a monitoring mode below. You can switch anytime.
+                    </p>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 w-full">
+                    <!-- Class Mode -->
+                    <button onclick="selectMode('class')"
+                            class="rounded-2xl bg-white shadow p-6 border hover:shadow-md transition flex flex-col items-center gap-3">
+                        <div class="w-10 h-10 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold">
+                            C
+                        </div>
+                        <div class="text-sm font-bold text-slate-800">Class Detection</div>
+                    </button>
+
+                    <!-- Exam Mode -->
+                    <button onclick="selectMode('exam')"
+                            class="rounded-2xl bg-white shadow p-6 border hover:shadow-md transition flex flex-col items-center gap-3">
+                        <div class="w-10 h-10 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center font-bold">
+                            E
+                        </div>
+                        <div class="text-sm font-bold text-slate-800">Exam Detection</div>
+                    </button>
+                </div>
+
+            </div>
+        </div>
+
+        <div class="school-footer p-3 text-[11px] text-center border-t border-slate-300">
+            FOCUSAI · Choose a mode to begin monitoring
+        </div>
+    </div>
+
+    <!-- CLASS APP -->
+    <div id="classApp" class="hidden flex-1 flex flex-col overflow-hidden">
+        <div class="school-header p-4 flex flex-wrap justify-between items-center gap-4">
+            <div>
+                <h1 class="text-xl font-bold text-white tracking-widest">
+                    FOCUS<span class="text-yellow-300">AI</span>
+                </h1>
+                <p class="text-xs text-blue-200">Class Activity Attention Tracking</p>
+            </div>
+
+            <div class="flex items-center gap-4 bg-white px-4 py-2 rounded-lg shadow hud-panel">
+                <label class="text-xs font-bold text-slate-700">STRICTNESS:</label>
+                <input id="sensitivity" type="range" min="10" max="90" value="50" class="w-32 h-1">
+                <span id="senseVal" class="text-xs font-mono text-blue-700">50%</span>
+            </div>
+
+            <div class="flex gap-6 items-center">
+                <div class="text-center">
+                    <div class="text-[10px] text-blue-100 uppercase">Students</div>
+                    <div id="countDisplay" class="text-2xl font-bold text-white leading-none">0</div>
+                </div>
+                <div class="text-center">
+                    <div class="text-[10px] text-blue-100 uppercase">Focus Level</div>
+                    <div id="focusDisplay" class="text-2xl font-bold text-white leading-none">--</div>
+                </div>
+                <div class="hidden sm:flex flex-col text-[10px] text-blue-100" id="activeStudentInfo">
+                    <span id="activeStudentNameLabel">Student: --</span>
+                    <span id="activeStudentRollLabel">Roll No: --</span>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-3">
+                <div class="flex items-center gap-2">
+                    <div id="recordStatus" class="w-3 h-3 bg-red-600 rounded-full hidden"></div>
+                    <p id="recordText" class="text-sm font-bold text-white hidden">RECORDING...</p>
+                </div>
+
+                <button id="initBtn"
+                        onclick="toggleSystem()"
+                        class="bg-yellow-400 hover:bg-yellow-300 text-black px-4 py-2 rounded font-bold text-sm transition shadow">
+                    START SYSTEM
+                </button>
+
+                <button onclick="toggleMainMenu()"
+                        class="p-2 rounded-full bg-blue-900/60 hover:bg-blue-800 text-blue-100 flex flex-col justify-center">
+                    <span class="block w-4 h-[2px] bg-blue-100 mb-[3px]"></span>
+                    <span class="block w-4 h-[2px] bg-blue-100 mb-[3px]"></span>
+                    <span class="block w-4 h-[2px] bg-blue-100"></span>
+                </button>
+            </div>
+        </div>
+
+        <div class="relative flex-1 bg-white w-full flex items-center justify-center overflow-hidden">
+            <video id="video" class="hidden" playsinline></video>
+            <canvas id="canvas"></canvas>
+
+            <div id="loader" class="absolute inset-0 flex flex-col items-center justify-center z-30 hidden">
+                <div class="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+                <h2 class="text-xl font-bold">LOADING AI MODEL</h2>
+                <p class="text-sm mt-2">MoveNet Multi-Person Loading…</p>
+            </div>
+        </div>
+
+        <div class="school-footer p-2 text-[10px] flex justify-center gap-6 border-t border-slate-300">
+            <span class="flex items-center gap-1">
+                <div class="w-2 h-2 bg-green-500 rounded-full"></div> Focused
+            </span>
+            <span class="flex items-center gap-1">
+                <div class="w-2 h-2 bg-red-500 rounded-full"></div> Distracted
+            </span>
+            <span class="hidden sm:flex items-center gap-1 text-slate-500">
+                Session is recorded automatically while system is ON
+            </span>
+        </div>
+    </div>
+
+    <!-- EXAM APP -->
+    <div id="examApp" class="hidden flex-1 flex flex-col overflow-hidden">
+        <div class="school-header p-4 flex flex-wrap justify-between items-center gap-4">
+            <div>
+                <h1 class="text-xl font-bold text-white tracking-widest">
+                    FOCUS<span class="text-yellow-300">AI</span>
+                </h1>
+                <p class="text-xs text-blue-200">Exam Monitoring Mode</p>
+            </div>
+
+            <div class="flex items-center gap-6">
+                <div class="flex flex-col text-[10px] text-blue-100" id="examActiveStudentInfo">
+                    <span id="examActiveStudentNameLabel">Student: --</span>
+                    <span id="examActiveStudentRollLabel">Roll No: --</span>
+                </div>
+
+                <div class="flex items-center gap-4 bg-white/95 px-4 py-2 rounded-lg shadow hud-panel">
+                    <div class="text-[10px] font-bold text-slate-700 uppercase">Mode</div>
+                    <div class="text-xs font-semibold text-amber-600">EXAM DETECTION · O</div>
+                </div>
+
+                <button onclick="toggleMainMenu()"
+                        class="p-2 rounded-full bg-blue-900/60 hover:bg-blue-800 text-blue-100 flex flex-col justify-center">
+                    <span class="block w-4 h-[2px] bg-blue-100 mb-[3px]"></span>
+                    <span class="block w-4 h-[2px] bg-blue-100 mb-[3px]"></span>
+                    <span class="block w-4 h-[2px] bg-blue-100"></span>
+                </button>
+            </div>
+        </div>
+
+        <div class="flex-1 flex flex-col items-center justify-center bg-white p-4 gap-4 w-full">
+            <div class="hud-panel w-full max-w-3xl rounded-2xl overflow-hidden relative">
+                <div class="border-b border-slate-200 px-4 py-2 flex justify-between items-center text-[11px] text-slate-500">
+                    <span>Exam Camera · Live</span>
+                    <span class="text-amber-600 font-semibold">
+                        Detecting head turns, head down, hand gestures, phone & paper
+                    </span>
+                </div>
+                <div class="relative bg-black">
+                    <video id="examVideo" class="hidden" playsinline></video>
+                    <canvas id="examCanvas" class="w-full h-[360px]"></canvas>
+
+                    <div id="examLoader" class="absolute inset-0 flex flex-col items-center justify-center z-30 hidden">
+                        <div class="w-16 h-16 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+                        <h2 class="text-xl font-bold">LOADING EXAM AI</h2>
+                        <p class="text-sm mt-2">Pose + Gesture + Phone + Paper + Noise engines…</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="w-full max-w-3xl grid grid-cols-1 md:grid-cols-3 gap-3 text-[11px]">
+                <div class="hud-panel rounded-xl px-3 py-2 flex flex-col">
+                    <span class="uppercase text-slate-500 font-semibold mb-1">Total Examinees</span>
+                    <span id="examTotalDisplay" class="text-lg font-bold text-slate-800">0</span>
+                </div>
+                <div class="hud-panel rounded-xl px-3 py-2 flex flex-col">
+                    <span class="uppercase text-slate-500 font-semibold mb-1">Suspicious</span>
+                    <span id="examSuspectDisplay" class="text-lg font-bold suspect-text">0</span>
+                </div>
+                <div class="hud-panel rounded-xl px-3 py-2 flex flex-col">
+                    <span class="uppercase text-slate-500 font-semibold mb-1">Status</span>
+                    <span id="examStatusText" class="text-xs font-semibold text-slate-700">
+                        Exam AI ready.
+                    </span>
+                </div>
+            </div>
+
+            <button onclick="stopExamSystem()"
+                    class="mt-2 px-4 py-2 rounded-md bg-red-600 text-white text-xs font-semibold hover:bg-red-500">
+                STOP EXAM & GENERATE REPORT
+            </button>
+        </div>
+
+        <div class="school-footer p-2 text-[10px] flex justify-center gap-6 border-t border-slate-300">
+            <span class="text-slate-600">
+                FOCUSAI Exam Mode · Multi-signal suspicion detection
+            </span>
+        </div>
+    </div>
+
+    <!-- STUDENTS VIEW -->
+    <div id="studentsView" class="hidden flex-1 flex flex-col overflow-hidden">
+        <div class="school-header p-4 flex justify-between items-center">
+            <div>
+                <h1 class="text-xl font-bold text-white tracking-widest">
+                    FOCUS<span class="text-yellow-300">AI</span>
+                </h1>
+                <p class="text-xs text-blue-200">Student Management</p>
+            </div>
+            <div class="flex items-center gap-3">
+                <div class="text-xs text-blue-100 text-right hidden sm:block">
+                    <div class="uppercase tracking-wide">Students</div>
+                    <div class="text-[10px]">Add student details for display</div>
+                </div>
+                <button onclick="toggleMainMenu()"
+                        class="p-2 rounded-full bg-blue-900/60 hover:bg-blue-800 text-blue-100 flex flex-col justify-center">
+                    <span class="block w-4 h-[2px] bg-blue-100 mb-[3px]"></span>
+                    <span class="block w-4 h-[2px] bg-blue-100 mb-[3px]"></span>
+                    <span class="block w-4 h-[2px] bg-blue-100"></span>
+                </button>
+            </div>
+        </div>
+
+        <div class="flex-1 bg-slate-100 px-4 py-4 flex justify-center">
+            <div class="max-w-4xl w-full flex flex-col gap-4">
+                <div class="hud-panel rounded-2xl p-4 flex flex-col gap-2">
+                    <div class="flex justify-between items-center">
+                        <h2 class="text-sm font-bold text-slate-800">Add Student</h2>
+                        <div class="text-[11px] text-slate-500">
+                            Active Student:
+                            <span id="studentsActiveDisplay" class="font-semibold text-blue-700">None selected</span>
+                        </div>
+                    </div>
+
+                    <form id="studentForm"
+                          class="mt-2 grid grid-cols-1 md:grid-cols-4 gap-3"
+                          onsubmit="addStudent(event)">
+                        <div class="flex flex-col gap-1">
+                            <label class="text-[11px] font-semibold text-slate-600">Student Name</label>
+                            <input id="studentName" type="text" required
+                                   class="border border-slate-300 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500">
+                        </div>
+                        <div class="flex flex-col gap-1">
+                            <label class="text-[11px] font-semibold text-slate-600">Roll No</label>
+                            <input id="studentRoll" type="text" required
+                                   class="border border-slate-300 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500">
+                        </div>
+                        <div class="flex flex-col gap-1">
+                            <label class="text-[11px] font-semibold text-slate-600">Photo</label>
+                            <input id="studentImage" type="file" accept="image/*"
+                                   class="text-[11px]">
+                        </div>
+                        <div class="flex items-end">
+                            <button type="submit"
+                                    class="w-full md:w-auto px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-semibold hover:bg-blue-500">
+                                Add Student
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="hud-panel rounded-2xl p-4">
+                    <h2 class="text-sm font-bold text-slate-800 mb-2">Student List</h2>
+                    <div id="studentsList" class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm"></div>
+                    <div id="noStudentsMessage" class="text-[11px] text-slate-500 mt-2">
+                        No students added yet. Add a student using the form above.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="school-footer p-2 text-[10px] flex justify-center gap-6 border-t border-slate-300">
+            <span class="text-slate-600">Student details are shown in Class & Exam headers</span>
+        </div>
+    </div>
+
+    <!-- SETTINGS VIEW -->
+    <div id="settingsView" class="hidden flex-1 flex flex-col overflow-hidden">
+        <div class="school-header p-4 flex justify-between items-center">
+            <div>
+                <h1 class="text-xl font-bold text-white tracking-widest">
+                    FOCUS<span class="text-yellow-300">AI</span>
+                </h1>
+                <p class="text-xs text-blue-200">Settings</p>
+            </div>
+            <div class="flex items-center gap-3">
+                <div class="text-xs text-blue-100 text-right hidden sm:block">
+                    <div class="uppercase tracking-wide">Display & Theme</div>
+                    <div class="text-[10px]">Customize how FOCUSAI looks</div>
+                </div>
+                <button onclick="toggleMainMenu()"
+                        class="p-2 rounded-full bg-blue-900/60 hover:bg-blue-800 text-blue-100 flex flex-col justify-center">
+                    <span class="block w-4 h-[2px] bg-blue-100 mb-[3px]"></span>
+                    <span class="block w-4 h-[2px] bg-blue-100 mb-[3px]"></span>
+                    <span class="block w-4 h-[2px] bg-blue-100"></span>
+                </button>
+            </div>
+        </div>
+
+        <div class="flex-1 bg-slate-100 px-4 py-4 flex justify-center">
+            <div class="max-w-3xl w-full flex flex-col gap-4">
+                <div class="hud-panel rounded-2xl p-4 flex justify-between items-center">
+                    <div>
+                        <h2 class="text-sm font-bold text-slate-800">Theme</h2>
+                        <p class="text-[11px] text-slate-500">
+                            Switch between light and dark mode.
+                        </p>
+                    </div>
+                    <select id="themeSelect"
+                            class="border border-slate-300 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500">
+                        <option value="light">Light Mode</option>
+                        <option value="dark">Dark Mode</option>
+                    </select>
+                </div>
+
+                <div class="hud-panel rounded-2xl p-4 flex justify-between items-center">
+                    <div>
+                        <h2 class="text-sm font-bold text-slate-800">Font Size</h2>
+                        <p class="text-[11px] text-slate-500">
+                            Adjust the overall text size of the app.
+                        </p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <input id="fontSizeRange" type="range" min="90" max="120" value="100">
+                        <span id="fontSizeValue" class="text-xs text-slate-700">100%</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="school-footer p-2 text-[10px] flex justify-center gap-6 border-t border-slate-300">
+            <span class="text-slate-600">Settings only change this browser's view</span>
+        </div>
+    </div>
+
+    <!-- MAIN MENU DROPDOWN -->
+    <div id="mainMenu"
+         class="hidden fixed right-4 top-14 z-50 bg-white rounded-xl shadow-lg border border-slate-200 text-sm">
+        <button onclick="goHome()" class="block w-full text-left px-4 py-2 hover:bg-slate-100 border-b border-slate-100">
+            Home
+        </button>
+        <button onclick="openStudents()" class="block w-full text-left px-4 py-2 hover:bg-slate-100 border-b border-slate-100">
+            Students
+        </button>
+        <button onclick="openSettings()" class="block w-full text-left px-4 py-2 hover:bg-slate-100">
+            Settings
+        </button>
+    </div>
+
+    <!-- Main Script -->
+    <script src="script.js"></script>
+</body>
+</html>
